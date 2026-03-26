@@ -44,7 +44,7 @@ class S3LoaderTests(unittest.TestCase):
             / "manchester_united"
             / "player_stats"
             / "2025"
-            / "scrape_date=2026-03-23.parquet"
+            / "scrape_date=2026-03-23.csv"
         )
 
         self.assertEqual(
@@ -56,7 +56,7 @@ class S3LoaderTests(unittest.TestCase):
             self.loader.build_s3_key(cleaned_file),
         )
         self.assertEqual(
-            "silver/transfermarkt/manchester_united/player_stats/2025/scrape_date=2026-03-23.parquet",
+            "silver/transfermarkt/manchester_united/player_stats/2025/scrape_date=2026-03-23.csv",
             self.loader.build_s3_key(silver_file),
         )
 
@@ -85,7 +85,7 @@ class S3LoaderTests(unittest.TestCase):
             / "manchester_united"
             / "player_stats"
             / "2025"
-            / "scrape_date=2026-03-23.parquet",
+            / "scrape_date=2026-03-23.csv",
         ]
 
         for path in paths:
@@ -117,7 +117,7 @@ class S3LoaderTests(unittest.TestCase):
                 / "manchester_united"
                 / "player_stats"
                 / "2025"
-                / "scrape_date=2026-03-23.parquet",
+                / "scrape_date=2026-03-23.csv",
             ],
             files,
         )

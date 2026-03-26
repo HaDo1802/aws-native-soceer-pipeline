@@ -98,12 +98,12 @@ class PlayerStatsTransformer:
         if not transformed_rows:
             return None
 
-        output_path = self._parquet_output_path(season, active_team)
+        output_path = self._csv_output_path(season, active_team)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         dataframe = pd.DataFrame(transformed_rows, columns=self.COLUMNS)
         dataframe = self._apply_dtypes(dataframe)
-        dataframe.to_parquet(output_path, engine="pyarrow", compression="snappy", index=False)
-        LOGGER.info("Wrote cleaned player stats parquet to %s", output_path)
+        dataframe.to_csv(output_path, index=False)
+        LOGGER.info("Wrote cleaned player stats CSV to %s", output_path)
         return output_path
 
     def transform_player_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -150,7 +150,7 @@ class PlayerStatsTransformer:
             "is_home_match": self._infer_is_home(home_team_name, away_team_name),
         }
 
-    def _parquet_output_path(self, season: str, team: str) -> Path:
+    def _csv_output_path(self, season: str, team: str) -> Path:
         scrape_date = datetime.now(timezone.utc).date().isoformat()
         return (
             Path(self.config.LOCAL_SILVER_ROOT)
@@ -158,7 +158,7 @@ class PlayerStatsTransformer:
             / team
             / "player_stats"
             / season
-            / f"scrape_date={scrape_date}.parquet"
+            / f"scrape_date={scrape_date}.csv"
         )
 
     def _apply_dtypes(self, dataframe: pd.DataFrame) -> pd.DataFrame:

@@ -193,7 +193,7 @@ class S3Loader:
 
         if include_cleaned:
             silver_root = Path(self.config.LOCAL_SILVER_ROOT)
-            files.extend(silver_root.glob("transfermarkt/*/**/*.parquet"))
+            files.extend(silver_root.glob("transfermarkt/*/**/*.csv"))
 
         if season:
             files = [path for path in files if season in path.parts]
