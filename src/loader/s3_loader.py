@@ -1,5 +1,9 @@
+import csv
+import io
+import json
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional
 
 import boto3
 
@@ -8,6 +12,104 @@ from utils.logger import get_logger
 
 
 LOGGER = get_logger(__name__)
+
+
+def resolve_scrape_date(scrape_date: Optional[str] = None) -> str:
+    if scrape_date:
+        return scrape_date
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+def save_bronze_s3(
+    data: dict,
+    source: str,
+    team: str,
+    artifact_name: str,
+    season: str,
+    bucket: str,
+    bronze_prefix: str = "bronze",
+    entity: Optional[str] = None,
+    scrape_date: Optional[str] = None,
+) -> str:
+    key_parts = [bronze_prefix, source, team, artifact_name]
+    if entity is not None:
+        key_parts.append(entity)
+    key_parts.extend([season, f"scrape_date={resolve_scrape_date(scrape_date)}.json"])
+    key = "/".join(key_parts)
+
+    boto3.client("s3").put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=json.dumps(data, indent=2).encode("utf-8"),
+        ContentType="application/json",
+    )
+    LOGGER.info("Wrote bronze data to s3://%s/%s", bucket, key)
+    return key
+
+
+def save_bronze_s3_csv(
+    rows: list[dict[str, Any]],
+    source: str,
+    team: str,
+    artifact_name: str,
+    season: str,
+    bucket: str,
+    bronze_prefix: str = "bronze",
+    scrape_date: Optional[str] = None,
+) -> Optional[str]:
+    if not rows:
+        return None
+
+    key = "/".join(
+        [
+            bronze_prefix,
+            source,
+            team,
+            artifact_name,
+            season,
+            f"scrape_date={resolve_scrape_date(scrape_date)}.csv",
+        ]
+    )
+
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=list(rows[0].keys()))
+    writer.writeheader()
+    writer.writerows(rows)
+
+    boto3.client("s3").put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=buffer.getvalue().encode("utf-8"),
+        ContentType="text/csv",
+    )
+    LOGGER.info("Wrote bronze CSV data to s3://%s/%s", bucket, key)
+    return key
+
+
+def load_player_payloads_from_s3(
+    team: str,
+    season: str,
+    bucket: str,
+    bronze_prefix: str = "bronze",
+    scrape_date: Optional[str] = None,
+    source: str = "transfermarkt",
+) -> list[dict[str, Any]]:
+    s3_client = boto3.client("s3")
+    target_scrape_date = resolve_scrape_date(scrape_date)
+    prefix = "/".join([bronze_prefix, source, team, "player_detailed_stats_individual"])
+    suffix = f"/{season}/scrape_date={target_scrape_date}.json"
+
+    payloads: list[dict[str, Any]] = []
+    paginator = s3_client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for item in page.get("Contents", []):
+            key = item["Key"]
+            if not key.endswith(suffix):
+                continue
+            response = s3_client.get_object(Bucket=bucket, Key=key)
+            payloads.append(json.loads(response["Body"].read().decode("utf-8")))
+
+    return payloads
 
 
 class S3Loader:
