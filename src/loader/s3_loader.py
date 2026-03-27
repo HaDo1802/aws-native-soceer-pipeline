@@ -62,6 +62,8 @@ def save_bronze_s3_csv(
     if not rows:
         return None
 
+    resolved_scrape_date = resolve_scrape_date(scrape_date)
+    scraped_at = datetime.now(timezone.utc).isoformat()
     key = "/".join(
         [
             bronze_prefix,
@@ -69,14 +71,22 @@ def save_bronze_s3_csv(
             team,
             artifact_name,
             season,
-            f"scrape_date={resolve_scrape_date(scrape_date)}.csv",
+            f"scrape_date={resolved_scrape_date}.csv",
         ]
     )
 
+    enriched_rows = [
+        {
+            **row,
+            "scrape_date": resolved_scrape_date,
+            "scraped_at": scraped_at,
+        }
+        for row in rows
+    ]
     buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=list(rows[0].keys()))
+    writer = csv.DictWriter(buffer, fieldnames=list(enriched_rows[0].keys()))
     writer.writeheader()
-    writer.writerows(rows)
+    writer.writerows(enriched_rows)
 
     boto3.client("s3").put_object(
         Bucket=bucket,

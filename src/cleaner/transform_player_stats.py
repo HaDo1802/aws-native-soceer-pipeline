@@ -18,6 +18,8 @@ class PlayerStatsTransformer:
     COLUMNS = [
         "season",
         "season_label",
+        "bronze_scrape_date",
+        "transformed_at",
         "club",
         "player_name",
         "player_id",
@@ -107,6 +109,15 @@ class PlayerStatsTransformer:
         )
         if not transformed_rows:
             return None
+        transformed_at = datetime.now(timezone.utc).isoformat()
+        transformed_rows = [
+            {
+                **row,
+                "bronze_scrape_date": resolved_scrape_date,
+                "transformed_at": transformed_at,
+            }
+            for row in transformed_rows
+        ]
 
         output_path = self._csv_output_path(
             season=season,

@@ -83,8 +83,92 @@ python3 -m pip install -r requirements.txt
 make test
 python scripts/run_local_scrape_all.py --team manchester_united --season 2025
 python scripts/run_local_clean_player_stats.py --team manchester_united --season 2025
+```
+
+## Deployment
+
+### 1. Build Lambda artifacts
+
+Use [`build_lambda.sh`](build_lambda.sh) from the project root to package each Lambda function:
+
+```bash
+./build_lambda.sh scrape-roster scrape_roster_handler.py
 ./build_lambda.sh scrape-players scrape_players_handler.py
-aws lambda update-function-code --function-name scrape-players --zip-file fileb://scrape-players.zip
+./build_lambda.sh combine-player-json-to-csv combine_player_json_to_csv_handler.py
+./build_lambda.sh clean-player-stats clean_player_stats_handler.py
+```
+
+Each build command creates a deployment zip that contains:
+
+- `src/`
+- `utils/`
+- the selected handler from `lambda_deployment/`
+- dependencies from `requirements.txt`
+
+The output files are written to the repo root as:
+
+```text
+scrape-roster.zip
+scrape-players.zip
+combine-player-json-to-csv.zip
+clean-player-stats.zip
+```
+
+### 2. Create a Lambda function for the first time
+
+If the Lambda does not exist yet in AWS, create it first. Example for the cleaner Lambda:
+
+```bash
+aws lambda create-function \
+  --function-name clean-player-stats \
+  --runtime python3.11 \
+  --role arn:aws:iam::317883707547:role/dev_lamda \
+  --handler clean_player_stats_handler.handler \
+  --zip-file fileb://clean-player-stats.zip \
+  --timeout 300 \
+  --memory-size 256 \
+  --environment "Variables={S3_BUCKET=sport-analysis,S3_BRONZE_PREFIX=bronze,S3_SILVER_PREFIX=silver}"
+```
+
+For the other functions, keep the same structure and change:
+
+- `--function-name`
+- `--handler`
+- `--zip-file`
+
+The handler values for this project are listed below in the handler mapping reference.
+
+### 3. Update Lambda code after the function already exists
+
+Once a Lambda function has already been created, update only its code package with:
+
+```bash
+aws lambda update-function-code \
+  --function-name scrape-roster \
+  --zip-file fileb://scrape-roster.zip
+
+aws lambda update-function-code \
+  --function-name scrape-players \
+  --zip-file fileb://scrape-players.zip
+
+aws lambda update-function-code \
+  --function-name combine-player-json-to-csv \
+  --zip-file fileb://combine-player-json-to-csv.zip
+
+aws lambda update-function-code \
+  --function-name clean-player-stats \
+  --zip-file fileb://clean-player-stats.zip
+```
+
+> **Note:** `aws lambda update-function-code` only works for functions that already exist. Always run the build step before either `create-function` or `update-function-code`.
+
+### 4. Handler mapping reference
+
+```text
+scrape_roster_handler.handler
+scrape_players_handler.handler
+combine_player_json_to_csv_handler.handler
+clean_player_stats_handler.handler
 ```
 
 ## Scraping and Storage Strategy

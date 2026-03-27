@@ -57,12 +57,21 @@ def save_local_combined_csv(
     base_path.mkdir(parents=True, exist_ok=True)
 
     scrape_date = datetime.now(timezone.utc).date().isoformat()
+    scraped_at = datetime.now(timezone.utc).isoformat()
     data_path = base_path / f"scrape_date={scrape_date}.csv"
-    fieldnames = list(rows[0].keys())
+    enriched_rows = [
+        {
+            **row,
+            "scrape_date": scrape_date,
+            "scraped_at": scraped_at,
+        }
+        for row in rows
+    ]
+    fieldnames = list(enriched_rows[0].keys())
     with data_path.open("w", newline="", encoding="utf-8") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(enriched_rows)
 
     LOGGER.info("Wrote bronze CSV data to %s", data_path)
     return data_path
