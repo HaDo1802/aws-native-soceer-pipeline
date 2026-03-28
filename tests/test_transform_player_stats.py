@@ -44,7 +44,6 @@ class PlayerStatsTransformerTests(unittest.TestCase):
         self.assertEqual(6, transformed["home_team_rank"])
         self.assertEqual("Manchester United", transformed["away_team_name"])
         self.assertEqual(1, transformed["away_team_rank"])
-        self.assertFalse(transformed["is_home_match"])
 
     def test_transform_season_uses_latest_bronze_snapshot_by_default(self) -> None:
         with TemporaryDirectory() as temp_dir:

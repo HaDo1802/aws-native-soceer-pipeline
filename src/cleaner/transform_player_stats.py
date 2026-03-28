@@ -28,7 +28,6 @@ class PlayerStatsTransformer:
         "match_date",
         "match_date_iso",
         "venue",
-        "is_home_match",
         "home_team",
         "home_team_name",
         "home_team_rank",
@@ -204,7 +203,6 @@ class PlayerStatsTransformer:
             "home_team_rank": home_team_rank,
             "away_team_name": away_team_name,
             "away_team_rank": away_team_rank,
-            "is_home_match": self._infer_is_home(home_team_name, away_team_name),
         }
 
     def _csv_output_path(self, season: str, team: str, scrape_date: str) -> Path:
@@ -264,7 +262,6 @@ class PlayerStatsTransformer:
         typed = dataframe.copy()
         for column in self.NULLABLE_INT_COLUMNS:
             typed[column] = typed[column].astype("Int64")
-        typed["is_home_match"] = typed["is_home_match"].astype("boolean")
         typed["performance_rating"] = typed["performance_rating"].astype("float64")
         return typed
 
@@ -291,11 +288,3 @@ class PlayerStatsTransformer:
         if match:
             return match.group(1).strip(), int(match.group(2))
         return cleaned, None
-
-    def _infer_is_home(self, home_team_name: Optional[str], away_team_name: Optional[str]) -> Optional[bool]:
-        club = self.config.CLUB_NAME
-        if home_team_name == club:
-            return True
-        if away_team_name == club:
-            return False
-        return None
