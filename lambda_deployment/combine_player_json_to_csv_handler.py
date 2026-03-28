@@ -1,7 +1,7 @@
 import os
 from typing import Any, Optional
 
-from src.loader.s3_loader import load_player_payloads_from_s3, save_bronze_s3_csv
+from src.loader.s3_loader import load_player_payloads_from_s3, resolve_scrape_date, save_bronze_s3_csv
 from utils.config import Config
 
 
@@ -44,6 +44,7 @@ def handler(event: Optional[dict[str, Any]], context: Any) -> dict[str, Any]:
         "team": config.TEAM_KEY,
         "club": config.CLUB_NAME,
         "season": season,
+        "scrape_date": resolve_scrape_date(scrape_date),
         "player_payloads_found": len(payloads),
         "total_rows": len(season_rows),
         "combined_csv_key": combined_key,
