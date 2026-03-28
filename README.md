@@ -205,6 +205,14 @@ That partitioning matches the main operational questions:
 - "Can I backfill older seasons without overwriting the latest run?"
 - "Can downstream jobs load a known snapshot deterministically?"
 
+### Why not store one big CSV per league-season
+
+Someone might wonder why the pipeline does not write one single raw file for every league and season. Evn though this design simpler , but it is not the best fit for scraping, retries, and later ingestion.
+
+- A single league-season CSV has a larger failure blast radius. If one club or one player scrape fails, the whole file becomes incomplete and must be regenerated.
+- Granular storage is more idempotent. Re-scraping one team or one player writes a new snapshot for only that slice instead of forcing a rewrite of the full league file.
+- Backfills are cheaper and safer. You can rerun one team, one season, or one scrape date without touching the rest of the league. Therefore, debugging is easier and much faster to inspect one team or player prefix than to search inside one very large CSV.
+- Ingestion is more flexible. Downstream jobs can load only the partitions that changed instead of reloading an entire league-season every time.
 
 ### Backfill strategy
 
