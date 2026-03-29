@@ -26,12 +26,38 @@ Transfermarkt.com → scrape_roster → scrape_players → combine_player_json_t
 - **Orchestration**: Step Functions for workflow sequencing
 - **Model**: Stateless Lambdas, append-only raw snapshots, immutable cleaned outputs
 
+## Step Functions Orchestration
+
+AWS Step Functions orchestrates the pipeline so each Lambda stays focused on one job while the workflow layer handles sequencing and coordination.
+
+- The state machine starts with roster scraping.
+- A `Map` state fans out player scraping in parallel from the roster output.
+- Once player-level raw snapshots are complete, the workflow triggers the combine step and then the cleaner step.
+- This keeps retry logic, execution history, and parallel control outside the Lambda code itself.
+
+![Step Functions workflow](image/techstack/step_function_diagram.png)
+
+The execution view makes it easier to observe which stage ran, which player-level branches succeeded, and where a retry is needed.
+
+![Step Functions execution view](image/techstack/step_function_execution_table_view.png)
+
 ## Execution Flow
 
 1. **Roster ingestion** (`scrape_roster_handler.handler`) - Scrapes squad roster
 2. **Player ingestion** (`scrape_players_handler.handler`) - Scrapes individual player'stats who exists in roster
 3. **Bronze aggregation** (`combine_player_json_to_csv_handler.handler`) - Combines player snapshots to CSV
 4. **Cleaned transformation** - Cleanses raw data for warehouse loading
+5. **Snowflake ingestion** (`snowflake_ingest_handler.handler`) - Loads cleaned S3 snapshots into Snowflake staging and bronze layers
+
+## Active Lambda Functions
+
+These are the Lambda functions currently used in AWS for this project:
+
+- `scrape-roster`
+- `scrape-players`
+- `combine-player-json`
+- `clean-player-stats`
+- `snowflake-ingest`
 
 ## Storage Layout
 
@@ -90,6 +116,7 @@ Use [`build_lambda.sh`](build_lambda.sh) from the project root to package each L
 ./build_lambda.sh scrape-players scrape_players_handler.py
 ./build_lambda.sh combine-player-json combine_player_json_to_csv_handler.py
 ./build_lambda.sh clean-player-stats clean_player_stats_handler.py
+./build_lambda.sh snowflake-ingest snowflake_ingest_handler.py
 ```
 
 Each build command creates a deployment zip that contains:
@@ -106,6 +133,7 @@ scrape-roster.zip
 scrape-players.zip
 combine-player-json.zip
 clean-player-stats.zip
+snowflake-ingest.zip
 ```
 
 ### 2. Create a Lambda function for the first time
@@ -152,11 +180,16 @@ aws lambda update-function-code \
 aws lambda update-function-code \
   --function-name clean-player-stats \
   --zip-file fileb://clean-player-stats.zip
+
+aws lambda update-function-code \
+  --function-name snowflake-ingest \
+  --zip-file fileb://snowflake-ingest.zip
 ```
 
 > **Note:** 
 - `aws lambda update-function-code` only works for functions that already exist. Always run the build step before either `create-function` or `update-function-code`.
 -  For `clean-player-stats` lambda, I manually add Numpy package on the layer on the UI to avoid the mismatch between OS and Linux installation (and I dont want to use Docker for this yet)
+- For `snowflake-ingest`, I currently prefer running ingestion locally or from CloudShell unless the Snowflake dependency layer is fully set up in Lambda.
 
 ### 4. Handler mapping reference
 
@@ -165,6 +198,7 @@ scrape_roster_handler.handler
 scrape_players_handler.handler
 combine_player_json_to_csv_handler.handler
 clean_player_stats_handler.handler
+snowflake_ingest_handler.handler
 ```
 
 ## Scraping and Storage Strategy

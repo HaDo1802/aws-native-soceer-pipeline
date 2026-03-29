@@ -13,6 +13,7 @@ mkdir $BUILD_DIR
 # Copy code
 cp -r src $BUILD_DIR/
 cp -r utils $BUILD_DIR/
+cp -r sql $BUILD_DIR/
 cp lambda_deployment/$HANDLER_FILE $BUILD_DIR/
 cp requirements.txt $BUILD_DIR/
 
