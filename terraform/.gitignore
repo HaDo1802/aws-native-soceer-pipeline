@@ -1,0 +1,11 @@
+# Ignore Terraform's local working directory.
+# This folder contains downloaded providers and local Terraform metadata.
+.terraform/
+
+# Ignore Terraform state files so they are not committed to git.
+# State often contains environment-specific details and should stay out of source control.
+*.tfstate
+*.tfstate.backup
+
+# Ignore tfvars files because they often contain local values or secrets.
+*.tfvars
