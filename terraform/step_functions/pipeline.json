@@ -1,0 +1,241 @@
+{
+  "Comment": "Premier League full pipeline: ScrapeLeague -> Teams -> Seasons -> Players -> Snowflake",
+  "StartAt": "ScrapeLeague",
+  "States": {
+    "ScrapeLeague": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${scrape_teams_league_arn}",
+        "Payload.$": "$"
+      },
+      "OutputPath": "$.Payload",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Next": "ProcessTeams"
+    },
+    "ProcessTeams": {
+      "Type": "Map",
+      "ItemsPath": "$.teams",
+      "ItemSelector": {
+        "team_key.$": "$$.Map.Item.Value.team_key",
+        "club_name.$": "$$.Map.Item.Value.club_name",
+        "club_slug.$": "$$.Map.Item.Value.club_slug",
+        "club_id.$": "$$.Map.Item.Value.club_id",
+        "seasons.$": "$.seasons",
+        "league_id.$": "$.league_id"
+      },
+      "MaxConcurrency": 2,
+      "ResultPath": "$.team_results",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "ProcessSeasons",
+        "States": {
+          "ProcessSeasons": {
+            "Type": "Map",
+            "ItemsPath": "$.seasons",
+            "ItemSelector": {
+              "team.$": "$.team_key",
+              "club_name.$": "$.club_name",
+              "club_slug.$": "$.club_slug",
+              "club_id.$": "$.club_id",
+              "season.$": "$$.Map.Item.Value"
+            },
+            "MaxConcurrency": 1,
+            "ResultPath": "$.season_results",
+            "ItemProcessor": {
+              "ProcessorConfig": {
+                "Mode": "INLINE"
+              },
+              "StartAt": "ScrapeRoster",
+              "States": {
+                "ScrapeRoster": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "Parameters": {
+                    "FunctionName": "${scrape_roster_arn}",
+                    "Payload.$": "$"
+                  },
+                  "OutputPath": "$.Payload",
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                      ],
+                      "IntervalSeconds": 2,
+                      "MaxAttempts": 3,
+                      "BackoffRate": 2,
+                      "JitterStrategy": "FULL"
+                    }
+                  ],
+                  "Next": "ProcessPlayers"
+                },
+                "ProcessPlayers": {
+                  "Type": "Map",
+                  "ItemsPath": "$.players",
+                  "ItemSelector": {
+                    "team.$": "$.team",
+                    "club_name.$": "$.club_name",
+                    "club_slug.$": "$.club_slug",
+                    "club_id.$": "$.club_id",
+                    "season.$": "$.season",
+                    "scrape_date.$": "$.scrape_date",
+                    "player.$": "$$.Map.Item.Value"
+                  },
+                  "MaxConcurrency": 5,
+                  "ResultPath": "$.player_results_array",
+                  "ItemProcessor": {
+                    "ProcessorConfig": {
+                      "Mode": "INLINE"
+                    },
+                    "StartAt": "ScrapePlayerStats",
+                    "States": {
+                      "ScrapePlayerStats": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Parameters": {
+                          "FunctionName": "${scrape_players_arn}",
+                          "Payload": {
+                            "team.$": "$.team",
+                            "club_name.$": "$.club_name",
+                            "club_slug.$": "$.club_slug",
+                            "club_id.$": "$.club_id",
+                            "season.$": "$.season",
+                            "scrape_date.$": "$.scrape_date",
+                            "player.$": "$.player"
+                          }
+                        },
+                        "OutputPath": "$.Payload",
+                        "Retry": [
+                          {
+                            "ErrorEquals": [
+                              "Lambda.ServiceException",
+                              "Lambda.AWSLambdaException",
+                              "Lambda.SdkClientException",
+                              "Lambda.TooManyRequestsException"
+                            ],
+                            "IntervalSeconds": 3,
+                            "MaxAttempts": 2,
+                            "BackoffRate": 2,
+                            "JitterStrategy": "FULL"
+                          }
+                        ],
+                        "End": true
+                      }
+                    }
+                  },
+                  "Next": "CombinePlayerStats"
+                },
+                "CombinePlayerStats": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "Parameters": {
+                    "FunctionName": "${combine_player_json_arn}",
+                    "Payload": {
+                      "team.$": "$.team",
+                      "club_name.$": "$.club_name",
+                      "season.$": "$.season",
+                      "scrape_date.$": "$.scrape_date"
+                    }
+                  },
+                  "OutputPath": "$.Payload",
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                      ],
+                      "IntervalSeconds": 1,
+                      "MaxAttempts": 3,
+                      "BackoffRate": 2,
+                      "JitterStrategy": "FULL"
+                    }
+                  ],
+                  "Next": "CleanPlayerStats"
+                },
+                "CleanPlayerStats": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "Parameters": {
+                    "FunctionName": "${clean_player_stats_arn}",
+                    "Payload": {
+                      "team.$": "$.team",
+                      "club_name.$": "$.club_name",
+                      "season.$": "$.season",
+                      "scrape_date.$": "$.scrape_date"
+                    }
+                  },
+                  "OutputPath": "$.Payload",
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                      ],
+                      "IntervalSeconds": 1,
+                      "MaxAttempts": 3,
+                      "BackoffRate": 2,
+                      "JitterStrategy": "FULL"
+                    }
+                  ],
+                  "Next": "SnowflakeIngest"
+                },
+                "SnowflakeIngest": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "Parameters": {
+                    "FunctionName": "${snowflake_ingest_arn}",
+                    "Payload": {
+                      "team.$": "$.results[0].team",
+                      "season.$": "$.results[0].season",
+                      "scrape_date.$": "$.results[0].scrape_date"
+                    }
+                  },
+                  "OutputPath": "$.Payload",
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                      ],
+                      "IntervalSeconds": 2,
+                      "MaxAttempts": 2,
+                      "BackoffRate": 2,
+                      "JitterStrategy": "FULL"
+                    }
+                  ],
+                  "End": true
+                }
+              }
+            },
+            "End": true
+          }
+        }
+      },
+      "End": true
+    }
+  }
+}

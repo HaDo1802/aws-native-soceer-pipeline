@@ -1,6 +1,6 @@
 # Cloud-Native ETL Pipeline
 
-Infrastructure-focused ETL pipeline for scraping and ingesting 1M+ records of Transfermarkt squad and player season data using AWS Lambda, S3, Step Functions, and Snowflake.
+Infrastructure-focused ETL pipeline for scraping and ingesting 1M+ records of Transfermarkt squad and player season data using AWS Lambda, S3, Step Functions, EventBridge Scheduler, Snowflake, and Terraform.
 
 <div align="center">
   <img src="image/background/image.png" alt="Background" width="1100">
@@ -13,6 +13,7 @@ Infrastructure-focused ETL pipeline for scraping and ingesting 1M+ records of Tr
 ![Snowflake](https://img.shields.io/badge/Snowflake-29B5E8?logo=snowflake&logoColor=white)
 ![Amazon EventBridge](https://img.shields.io/badge/Amazon%20EventBridge-FF4F8B?logo=amazoneventbridge&logoColor=white)
 ![AWS Step Functions](https://img.shields.io/badge/AWS%20Step%20Functions-C925D1?logo=awsstepfunctions&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-844FBA?logo=terraform&logoColor=white)
 
 ## Architecture
 
@@ -25,8 +26,9 @@ Transfermarkt.com → scrape_roster → scrape_players → combine_player_json_t
 - **Compute**: AWS Lambda for scraping, aggregation, cleaning, and Snowflake ingesting
 - **Storage**: S3 for raw and cleaned data
 - **Orchestration**: Step Functions for workflow sequencing
-- **Scheduling**: Amazon EventBridge for triggering the Step Functions workflow on a schedule
+- **Scheduling**: EventBridge Scheduler for triggering the Step Functions workflow on a weekly schedule
 - **Data Warehouse**: Snowflake (my free credits on Redshift is running out)
+- **Infrastructure as Code**: Terraform for Lambdas, IAM, Step Functions, and Scheduler configuration
 
 ## Step Functions Orchestration
 
@@ -182,6 +184,29 @@ clean-player-stats.zip
 snowflake-ingest.zip
 ```
 
+## Terraform Infrastructure
+
+Setting up the whole AWS Infra manually is not an easy thing, but with Terraform, I found it very much relieving [`terraform/`](terraform/) folder for codifying the AWS control plane around the pipeline. It covers the shared Lambda IAM role and policies, the five Lambda functions, the Step Functions state machine, and the EventBridge Scheduler trigger.
+
+Current Terraform scope:
+
+- `iam.tf`: least-privilege IAM for `dev_lamda`
+- `lambdas.tf`: the five pipeline Lambdas and their runtime configuration
+- `step_functions.tf`: the `Transfermarkt-Data-Pipeline` state machine and its dedicated role
+- `eventbridge.tf`: the weekly EventBridge Scheduler trigger and its dedicated role
+- `step_functions/pipeline.json`: externalized state machine definition loaded with `templatefile()`
+
+Typical Terraform flow:
+
+```bash
+cd terraform
+terraform init
+terraform plan
+terraform apply
+```
+
+The Lambda deployment zips are still required to be built from the repo root before Terraform applies code updates:
+
 ### 2. Create a Lambda function for the first time
 
 If the Lambda does not exist yet in AWS, create it first. Example for the cleaner Lambda:
@@ -234,6 +259,7 @@ aws lambda update-function-code \
 - `aws lambda update-function-code` only works for functions that already exist. Always run the build step before either `create-function` or `update-function-code`.
 -  For `clean-player-stats` lambda, I manually add Numpy package on the layer on the UI to avoid the mismatch between OS and Linux installation (and I dont want to use Docker for this yet)
 - For `snowflake-ingest`, I currently prefer running ingestion locally or from CloudShell unless the Snowflake dependency layer is fully set up in Lambda.
+- For day-to-day infrastructure changes, Terraform is now the preferred path over manual console edits.
 
 ## Scraping and Storage Strategy
 
@@ -282,4 +308,3 @@ Someone might wonder why the pipeline does not write one single raw file for eve
 ## Whats coming next?
 - Expand scope to scrape all team within 5 most common league: expect 1 million+ row of data
 - Transform data and visualization
-- I might be a fan of Manchester United, but not really a fan of configuring the AWS Service manually. Would consider applying Terraform IoC. 

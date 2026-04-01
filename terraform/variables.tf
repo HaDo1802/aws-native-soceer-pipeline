@@ -5,6 +5,11 @@ variable "aws_region" {
   default     = "us-west-1"
 }
 
+variable "aws_account_id" {
+  description = "AWS account ID used in IAM trust policy conditions."
+  default     = "317883707547"
+}
+
 # Project prefix
 variable "project_name" {
   description = "Project name prefix used to build Terraform-managed resource names."
